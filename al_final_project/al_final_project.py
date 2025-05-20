@@ -50,11 +50,12 @@ def trace_path(cell_details, dest, output_file, grid):
     path.reverse()
 
     with open(output_file, "w") as f:
-        f.write("The Path is\n")
-        for i in path:
-            f.write(f" -> {i} \n")
-        f.write("\n")
-        f.write(f"Total cost of the Path is: {total_cost}\n")
+    f.write("The Path is:\n")
+    for pos in path:
+        i, j = pos
+        battery = cell_details[i][j].battery
+        f.write(f" -> {pos} | Battery left: {battery:.2f}\n")
+    f.write(f"\nTotal cost of the Path is: {total_cost:.2f}\n")
 
 # A* Search 
 def a_star_search(grid, src, dest, ROW, COL, output_file):
