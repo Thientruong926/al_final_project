@@ -149,10 +149,10 @@ def main():
         row = []
         tokens = lines[i].split()
         for j, token in enumerate(tokens):
-            if token == 'S':
+            if token == 'A':
                 src = (i - 1, j)
                 row.append(1)
-            elif token == 'E':
+            elif token == 'B':
                 dest = (i - 1, j)
                 row.append(1)
             else:
@@ -161,7 +161,7 @@ def main():
 
     if src is None or dest is None:
         with open(output_file, "w") as f:
-            f.write("Error: Start (S) or Destination (B) not found in input.\n")
+            f.write("Error: Start (A) or Destination (B) not found in input.\n")
         return
 
     COL = len(grid[0])
