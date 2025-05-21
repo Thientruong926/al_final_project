@@ -13,6 +13,7 @@ class Cell:
         self.g = float('inf')
         self.h = 0
         self.battery = pin_max
+        self.total_cost = 0
 
 def is_valid(row, col, ROW, COL): #kiểm tra ô có nằm trong lưới không
     return 0 <= row < ROW and 0 <= col < COL
@@ -21,37 +22,27 @@ def is_destination(row, col, dest): #ô có phải đích không
     return row == dest[0] and col == dest[1]
 
 def calculate_h_value(row, col, dest): #ước lượng khoảng cách đến đích bằng công thức Euclidean
-    return math.hypot(400*row - dest[0], 400*col - dest[1])
+    return math.hypot(400*(row - dest[0]), 400*(col - dest[1]))
 
 def trace_path(cell_details, dest, grid): #truy vết đường đi từ đích về đầu bằng cách lần ngược theo parent_i, parent_j, và in ra chi phí
     path = []
     row, col = dest
-    total_cost = 0.0
+    final_total_cost = 0
 
     while not (cell_details[row][col].parent_i == row and cell_details[row][col].parent_j == col):
-        path.append((row, col, cell_details[row][col].battery))
+        path.append((row, col, cell_details[row][col].battery, cell_details[row][col].total_cost))
         temp_row = cell_details[row][col].parent_i
         temp_col = cell_details[row][col].parent_j
-
-        dx = abs(row - temp_row)
-        dy = abs(col - temp_col)
-        step_cost = math.sqrt(2) if dx == 1 and dy == 1 else 1.0
-
-        cell_value = grid[row][col]
-        if cell_value == 0:
-            cell_value = 1 
-
-        total_cost += cell_value * step_cost
-
+        final_total_cost += cell_details[row][col].total_cost
         row, col = temp_row, temp_col
 
-    path.append((row, col, cell_details[row][col].battery))
+    path.append((row, col, cell_details[row][col].battery, cell_details[row][col].total_cost))
     path.reverse()
 
     print("The Path is:")
     for i in path:
         print(f" -> {i}")
-    print(f"\nTotal cost of the Path is: {total_cost:.2f}\n")
+    print(f"\nTotal cost of the Path is: {final_total_cost:.2f}\n")
 
 # A* Search 
 def a_star_search(grid, src, dest, ROW, COL):
@@ -86,17 +77,19 @@ def a_star_search(grid, src, dest, ROW, COL):
 
         for dir in directions:
             new_i, new_j = i + dir[0], j + dir[1]
+            if i==6 and j==7:
+                print(new_i, new_j)
 
             if not is_valid(new_i, new_j, ROW, COL):
                 continue
 
             move_cost = round(400*math.sqrt(2), 2) if dir[0] != 0 and dir[1] != 0 else 400
-            if grid[i][j] == 'A':
+            if grid[i][j] == -1:
                 curr_cell_cost = 0
             else:
                 curr_cell_cost = grid[i][j]
 
-            if grid[new_i][new_j] == 'B':
+            if grid[new_i][new_j] == -1:
                 new_cell_cost = 0
             else:
                 new_cell_cost = grid[new_i][new_j]
@@ -112,15 +105,15 @@ def a_star_search(grid, src, dest, ROW, COL):
             else:
                 moveup_cost = (new_cell_cost - curr_cell_cost) * 100
                 '''
-                print(moveup_cost)
+                print (new_cell_cost, curr_cell_cost)
+                print(i, j, new_i, new_j)
+                print(move_cost, moveup_cost)
                 '''
                 battery_cost = 0.02*(move_cost + moveup_cost*1.25)
                 move_cost += moveup_cost
                 new_battery = battery - battery_cost
-                '''
-                print(battery)
-                print(battery_cost)
-                '''
+                #print(battery, battery_cost)
+
 
             if new_battery <= 0:
                 trace_path(cell_details, (i,j), grid)
@@ -128,11 +121,13 @@ def a_star_search(grid, src, dest, ROW, COL):
                 return
 
             if new_cell_cost == 0 and not is_destination(new_i, new_j, dest):
-                new_battery = pin_max
+                new_attery = pin_max
 
             if is_destination(new_i, new_j, dest):
                 cell_details[new_i][new_j].parent_i = i
                 cell_details[new_i][new_j].parent_j = j
+                cell_details[new_i][new_j].battery = round(new_battery, 2)
+                cell_details[new_i][new_j].total_cost = move_cost
                 trace_path(cell_details, dest, grid)
                 found_dest = True
                 return
@@ -142,13 +137,14 @@ def a_star_search(grid, src, dest, ROW, COL):
             f_new = g_new + h_new
 
             if cell_details[new_i][new_j].f > f_new:
-                heapq.heappush(open_list, (f_new, new_i, new_j, new_battery))
+                heapq.heappush(open_list, (f_new, new_i, new_j, round(new_battery, 2)))
                 cell_details[new_i][new_j].f = f_new
                 cell_details[new_i][new_j].g = g_new
                 cell_details[new_i][new_j].h = h_new
                 cell_details[new_i][new_j].battery = round(new_battery, 2)
                 cell_details[new_i][new_j].parent_i = i
                 cell_details[new_i][new_j].parent_j = j
+                cell_details[new_i][new_j].total_cost = move_cost
 
     if not found_dest:
         print("Cannot find the destination cell\n")
@@ -159,6 +155,7 @@ def main():
     input_folder = "input"
     
     # Chuyển map chọn thành index tương ứng với dãy file
+    '''
     try:
         map_number = int(choose)
         if map_number not in [1, 2, 3]:
@@ -166,7 +163,8 @@ def main():
     except ValueError:
         print("Please select a number from 1 to 3")
         return
-
+    '''
+    map_number = int(choose)
     # Tính toán chỉ số bắt đầu và kết thúc của các file input tương ứng
     start_index = (map_number - 1) * 4 + 1
     end_index = map_number * 4
@@ -210,10 +208,10 @@ def main():
         for j, token in enumerate(tokens):
             if token == 'A':
                 src = (i - 1, j)
-                row.append(1)
+                row.append(-1)
             elif token == 'B':
                 dest = (i - 1, j)
-                row.append(1)
+                row.append(-1)
             else:
                 row.append(int(token))
         grid.append(row)
