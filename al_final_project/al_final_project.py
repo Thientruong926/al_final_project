@@ -4,6 +4,7 @@ import os
 import random
 
 pin_max = 100.0
+s = set() #lưu vị trí trạm
 
 class Cell:
     def __init__(self):
@@ -14,6 +15,12 @@ class Cell:
         self.h = 0
         self.battery = pin_max
         self.total_cost = 0
+
+def init(grid, ROW, COL):
+    for i in range(ROW):
+        for j in range(COL):
+            if grid[i][j] == 0:
+                s.add((i, j))
 
 def is_valid(row, col, ROW, COL): #kiểm tra ô có nằm trong lưới không
     return 0 <= row < ROW and 0 <= col < COL
@@ -69,29 +76,33 @@ def a_star_search(grid, src, dest, ROW, COL):
                   (0, -1), (1, -1), (-1, 1), (-1, -1)]
 
     while open_list:
-
         f_val, i, j, battery = heapq.heappop(open_list)
-
+        
         if closed_list[i][j]:
             continue
         closed_list[i][j] = True
-
         estimated_battery_to_dest = 0.02 * cell_details[i][j].h
 
         #code tìm trạm từ vị trí đang xét
-        if cell_details[i][j].battery < estimated_battery_to_dest:
+        while cell_details[i][j].battery < estimated_battery_to_dest:
             print(f"Battery from ({i},{j}) not enough to reach destination. Seeking charging station.")
-            stations = find_charging_station(grid, (i, j), ROW, COL)
-            if not stations:
+            if not s:
                 print("No charging stations available.")
                 trace_path(cell_details, (i, j), grid)
                 return
+            
             stations.sort(key=lambda pos: math.hypot(grid[i][j] * 100, math.hypot(400 * (pos[0]-i), 400 * (pos[1]-j))))
             nearest_station = stations[0]
             print(f"Redirecting to charging station at {nearest_station}")
-            result = a_star_search_station(grid, src, nearest_station, ROW, COL, cell_details)
+            result = a_star_search_station(grid, (i, j), nearest_station, ROW, COL, cell_details)
             if result is not None:
                 i, j = result
+                print(cell_details[i][j].battery)
+                estimated_battery_to_dest = 0.02 * cell_details[i][j].h
+            else:
+                trace_path(cell_details, dest, grid)
+                print("drone can't find station.")
+                return
 
         for dir in directions:
             new_i, new_j = i + dir[0], j + dir[1]
@@ -119,20 +130,10 @@ def a_star_search(grid, src, dest, ROW, COL):
                 new_battery = battery - battery_cost
 
             # chưa xét trường hợp pin <= 0
-            '''
             if new_battery <= 0:
-                print(f"Battery depleted at ({i},{j}), searching for nearest charging station...")
-                stations = find_nearest_charging_station(grid, (i, j), ROW, COL)
-                if not stations:
-                    print("No charging stations found.")
-                    trace_path(cell_details, (i, j), grid)
-                    return
-                stations.sort(key=lambda pos: math.hypot(pos[0]-i, pos[1]-j))
-                for station in stations:
-                    print(f"Redirecting to charging station at {station}")
-                    a_star_search(grid, (i, j), station, ROW, COL)
-                    return
-            '''
+                print("The drone ran out of battery.")
+                trace_path(cell_details, (i, j), grid)
+                return
 
             # trên đường đi, drone vô tình đi vô trạm
             if new_cell_cost == 0 and not is_destination(new_i, new_j, dest):
@@ -151,7 +152,6 @@ def a_star_search(grid, src, dest, ROW, COL):
             h_new = calculate_h_value(new_i, new_j, new_cell_cost, dest)
             g_new = cell_details[i][j].g + move_cost
             f_new = g_new + h_new
-
             if cell_details[new_i][new_j].f > f_new:
                 heapq.heappush(open_list, (f_new, new_i, new_j, round(new_battery, 2)))
                 cell_details[new_i][new_j].f = f_new
@@ -164,17 +164,6 @@ def a_star_search(grid, src, dest, ROW, COL):
 
     if not found_dest:
         print("Cannot find the destination cell\n")
-
-def find_charging_station(grid, start, ROW, COL):
-    si, sj = start
-    stations = []
-    for i in range(ROW):
-        for j in range(COL):
-            if grid[i][j] == 0:
-                if si == i and sj==j:
-                    continue
-                stations.append((i, j))
-    return stations
 
 #code tìm trạm
 def a_star_search_station(grid, src, dest, ROW, COL, cell_details):
@@ -197,11 +186,11 @@ def a_star_search_station(grid, src, dest, ROW, COL, cell_details):
 
     while open_list:
 
+        f_val, i, j, battery = heapq.heappop(open_list)
+
         if closed_list[i][j]:
             continue
         closed_list[i][j] = True
-
-        f_val, i, j, battery = heapq.heappop(open_list)
 
         for dir in directions:
             new_i, new_j = i + dir[0], j + dir[1]
@@ -229,19 +218,21 @@ def a_star_search_station(grid, src, dest, ROW, COL, cell_details):
                 new_battery = battery - battery_cost
 
             if new_battery <= 0:
-                print("drone can't reach station")
                 return
-
-            if is_destination(new_i, new_j, dest):
-                cell_details[new_i][new_j].parent_i = i
-                cell_details[new_i][new_j].parent_j = j
-                cell_details[new_i][new_j].battery = round(new_battery, 2)
-                cell_details[new_i][new_j].total_cost = move_cost
-                return (new_i, new_j)
 
             h_new = calculate_h_value(new_i, new_j, new_cell_cost, dest)
             g_new = cell_details[i][j].g + move_cost
             f_new = g_new + h_new
+
+            if is_destination(new_i, new_j, dest):
+                cell_details[new_i][new_j].parent_i = i
+                cell_details[new_i][new_j].parent_j = j
+                cell_details[new_i][new_j].battery = pin_max
+                cell_details[new_i][new_j].total_cost = move_cost
+                cell_details[new_i][new_j].f = f_new
+                cell_details[new_i][new_j].g = g_new
+                cell_details[new_i][new_j].h = round(h_new, 2)
+                return (new_i, new_j)
 
             if cell_details[new_i][new_j].f > f_new:
                 heapq.heappush(open_list, (f_new, new_i, new_j, round(new_battery, 2)))
@@ -325,6 +316,7 @@ def main():
         return
 
     COL = len(grid[0])
+    init()
     a_star_search(grid, src, dest, ROW, COL)
 
 if __name__ == "__main__":
