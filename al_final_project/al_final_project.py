@@ -192,15 +192,49 @@ def a_star_search(grid, src, dest, ROW, COL):
 # Hàm chính: đọc dữ liệu từ file và gọi thuật toán
 
 def main():
-    input_path = "input.txt"
+    choose = input("Choose map (1-3): ").strip()
 
-    if not os.path.exists(input_path):
-        print(f"File {input_path} does not exist.")
+    input_folder = "input"
+    
+    # Chuyển map chọn thành index tương ứng với dãy file
+    try:
+        map_number = int(choose)
+        if map_number not in [1, 2, 3]:
+            raise ValueError
+    except ValueError:
+        print("Please select a number from 1 to 3")
+        return
+    map_number = int(choose)
+    # Tính toán chỉ số bắt đầu và kết thúc của các file input tương ứng
+    start_index = (map_number - 1) * 4 + 1
+    end_index = map_number * 4
+
+    # Code chọn file ngẫu nhiên
+    # Tạo danh sách tên file phù hợp
+    input_files = [f"input{i}.txt" for i in range(start_index, end_index + 1)]
+    input_files = [f for f in input_files if os.path.exists(os.path.join(input_folder, f))]
+
+    if not input_files:
+        print("No matching input file found.")
         return
 
-    print(f"\n--- Processing file: {input_path} ---")
+    # Chọn file ngẫu nhiên
+    filename = random.choice(input_files)
 
-    # Đọc nội dung từ file input.txt
+    '''
+    # Code chọn file từ bàn phím
+    filename = f"input{choose}.txt"
+    input_path = os.path.join(input_folder, filename)
+
+    if not os.path.exists(input_path):
+        print(f"File {filename} does not exist.")
+        return
+    '''
+    
+    input_path = os.path.join(input_folder, filename)
+    print(f"\n--- Processing file: {filename} ---")
+
+    # Đọc và xử lý file
     with open(input_path, "r") as f:
         lines = [line.strip() for line in f.readlines()]
 
