@@ -21,8 +21,8 @@ def is_valid(row, col, ROW, COL): #kiểm tra ô có nằm trong lưới không
 def is_destination(row, col, dest): #ô có phải đích không
     return row == dest[0] and col == dest[1]
 
-def calculate_h_value(row, col, dest): #ước lượng khoảng cách đến đích bằng công thức Euclidean
-    return math.hypot(400*(row - dest[0]), 400*(col - dest[1]))
+def calculate_h_value(row, col, height, dest): #ước lượng khoảng cách đến đích bằng công thức Euclidean
+    return math.hypot(100*height,(math.hypot(400*(row - dest[0]), 400*(col - dest[1]))))
 
 def trace_path(cell_details, dest, grid): #truy vết đường đi từ đích về đầu bằng cách lần ngược theo parent_i, parent_j, và in ra chi phí
     path = []
@@ -30,13 +30,13 @@ def trace_path(cell_details, dest, grid): #truy vết đường đi từ đích 
     final_total_cost = 0
 
     while not (cell_details[row][col].parent_i == row and cell_details[row][col].parent_j == col):
-        path.append((row, col, cell_details[row][col].battery, cell_details[row][col].total_cost))
+        path.append((row, col, cell_details[row][col].battery, cell_details[row][col].total_cost, cell_details[row][col].h))
         temp_row = cell_details[row][col].parent_i
         temp_col = cell_details[row][col].parent_j
         final_total_cost += cell_details[row][col].total_cost
         row, col = temp_row, temp_col
 
-    path.append((row, col, cell_details[row][col].battery, cell_details[row][col].total_cost))
+    path.append((row, col, cell_details[row][col].battery, cell_details[row][col].total_cost, cell_details[row][col].h))
     path.reverse()
 
     print("The Path is:")
@@ -44,7 +44,7 @@ def trace_path(cell_details, dest, grid): #truy vết đường đi từ đích 
         print(f" -> {i}")
     print(f"\nTotal cost of the Path is: {final_total_cost:.2f}\n")
 
-# A* Search 
+# A* Search
 def a_star_search(grid, src, dest, ROW, COL):
     if not is_valid(src[0], src[1], ROW, COL) or not is_valid(dest[0], dest[1], ROW, COL):
         print("Source or destination is invalid")
@@ -54,9 +54,9 @@ def a_star_search(grid, src, dest, ROW, COL):
     cell_details = [[Cell() for _ in range(COL)] for _ in range(ROW)]
 
     i, j = src
-    cell_details[i][j].f = 0.0
     cell_details[i][j].g = 0.0
-    cell_details[i][j].h = 0.0
+    cell_details[i][j].h = calculate_h_value(i, j, 0, dest)
+    cell_details[i][j].f = cell_details[i][j].g + cell_details[i][j].h
     cell_details[i][j].battery = pin_max
     cell_details[i][j].parent_i = i
     cell_details[i][j].parent_j = j
@@ -69,30 +69,40 @@ def a_star_search(grid, src, dest, ROW, COL):
                   (0, -1), (1, -1), (-1, 1), (-1, -1)]
 
     while open_list:
+
         f_val, i, j, battery = heapq.heappop(open_list)
 
         if closed_list[i][j]:
             continue
         closed_list[i][j] = True
 
+        estimated_battery_to_dest = 0.02 * cell_details[i][j].h
+
+        #code tìm trạm từ vị trí đang xét
+        if cell_details[i][j].battery < estimated_battery_to_dest:
+            print(f"Battery from ({i},{j}) not enough to reach destination. Seeking charging station.")
+            stations = find_charging_station(grid, (i, j), ROW, COL)
+            if not stations:
+                print("No charging stations available.")
+                trace_path(cell_details, (i, j), grid)
+                return
+            stations.sort(key=lambda pos: math.hypot(grid[i][j] * 100, math.hypot(400 * (pos[0]-i), 400 * (pos[1]-j))))
+            nearest_station = stations[0]
+            print(f"Redirecting to charging station at {nearest_station}")
+            result = a_star_search_station(grid, src, nearest_station, ROW, COL, cell_details)
+            if result is not None:
+                i, j = result
+
         for dir in directions:
             new_i, new_j = i + dir[0], j + dir[1]
-            if i==6 and j==7:
-                print(new_i, new_j)
 
             if not is_valid(new_i, new_j, ROW, COL):
                 continue
 
             move_cost = round(400*math.sqrt(2), 2) if dir[0] != 0 and dir[1] != 0 else 400
-            if grid[i][j] == -1:
-                curr_cell_cost = 0
-            else:
-                curr_cell_cost = grid[i][j]
 
-            if grid[new_i][new_j] == -1:
-                new_cell_cost = 0
-            else:
-                new_cell_cost = grid[new_i][new_j]
+            curr_cell_cost = 0 if grid[i][j] == -1 else grid[i][j]
+            new_cell_cost = 0 if grid[new_i][new_j] == -1 else grid[new_i][new_j]
 
             if curr_cell_cost == new_cell_cost:
                 battery_cost = 0.02*move_cost
@@ -104,24 +114,30 @@ def a_star_search(grid, src, dest, ROW, COL):
                 new_battery = battery - battery_cost
             else:
                 moveup_cost = (new_cell_cost - curr_cell_cost) * 100
-                '''
-                print (new_cell_cost, curr_cell_cost)
-                print(i, j, new_i, new_j)
-                print(move_cost, moveup_cost)
-                '''
                 battery_cost = 0.02*(move_cost + moveup_cost*1.25)
                 move_cost += moveup_cost
                 new_battery = battery - battery_cost
-                #print(battery, battery_cost)
 
-
+            # chưa xét trường hợp pin <= 0
+            '''
             if new_battery <= 0:
-                trace_path(cell_details, (i,j), grid)
-                print("The drone ran out of battery\n")
-                return
+                print(f"Battery depleted at ({i},{j}), searching for nearest charging station...")
+                stations = find_nearest_charging_station(grid, (i, j), ROW, COL)
+                if not stations:
+                    print("No charging stations found.")
+                    trace_path(cell_details, (i, j), grid)
+                    return
+                stations.sort(key=lambda pos: math.hypot(pos[0]-i, pos[1]-j))
+                for station in stations:
+                    print(f"Redirecting to charging station at {station}")
+                    a_star_search(grid, (i, j), station, ROW, COL)
+                    return
+            '''
 
+            # trên đường đi, drone vô tình đi vô trạm
             if new_cell_cost == 0 and not is_destination(new_i, new_j, dest):
-                new_attery = pin_max
+                new_battery = pin_max
+
 
             if is_destination(new_i, new_j, dest):
                 cell_details[new_i][new_j].parent_i = i
@@ -132,15 +148,15 @@ def a_star_search(grid, src, dest, ROW, COL):
                 found_dest = True
                 return
 
+            h_new = calculate_h_value(new_i, new_j, new_cell_cost, dest)
             g_new = cell_details[i][j].g + move_cost
-            h_new = calculate_h_value(new_i, new_j, dest)
             f_new = g_new + h_new
 
             if cell_details[new_i][new_j].f > f_new:
                 heapq.heappush(open_list, (f_new, new_i, new_j, round(new_battery, 2)))
                 cell_details[new_i][new_j].f = f_new
                 cell_details[new_i][new_j].g = g_new
-                cell_details[new_i][new_j].h = h_new
+                cell_details[new_i][new_j].h = round(h_new, 2)
                 cell_details[new_i][new_j].battery = round(new_battery, 2)
                 cell_details[new_i][new_j].parent_i = i
                 cell_details[new_i][new_j].parent_j = j
@@ -148,6 +164,94 @@ def a_star_search(grid, src, dest, ROW, COL):
 
     if not found_dest:
         print("Cannot find the destination cell\n")
+
+def find_charging_station(grid, start, ROW, COL):
+    si, sj = start
+    stations = []
+    for i in range(ROW):
+        for j in range(COL):
+            if grid[i][j] == 0:
+                if si == i and sj==j:
+                    continue
+                stations.append((i, j))
+    return stations
+
+#code tìm trạm
+def a_star_search_station(grid, src, dest, ROW, COL, cell_details):
+    if not is_valid(src[0], src[1], ROW, COL) or not is_valid(dest[0], dest[1], ROW, COL):
+        print("Source or station is invalid")
+        return
+
+    closed_list = [[False for _ in range(COL)] for _ in range(ROW)]
+
+    i, j = src
+    cell_details[i][j].g = 0.0
+    cell_details[i][j].h = calculate_h_value(i, j, 0, dest)
+    cell_details[i][j].f = cell_details[i][j].g + cell_details[i][j].h
+
+    open_list = []
+    heapq.heappush(open_list, (0.0, i, j, pin_max))
+
+    directions = [(0, 1), (1, 0), (1, 1), (-1, 0),
+                  (0, -1), (1, -1), (-1, 1), (-1, -1)]
+
+    while open_list:
+
+        if closed_list[i][j]:
+            continue
+        closed_list[i][j] = True
+
+        f_val, i, j, battery = heapq.heappop(open_list)
+
+        for dir in directions:
+            new_i, new_j = i + dir[0], j + dir[1]
+
+            if not is_valid(new_i, new_j, ROW, COL):
+                continue
+
+            move_cost = round(400*math.sqrt(2), 2) if dir[0] != 0 and dir[1] != 0 else 400
+
+            curr_cell_cost = 0 if grid[i][j] == -1 else grid[i][j]
+            new_cell_cost = 0 if grid[new_i][new_j] == -1 else grid[new_i][new_j]
+
+            if curr_cell_cost == new_cell_cost:
+                battery_cost = 0.02*move_cost
+                new_battery = battery - battery_cost
+            elif curr_cell_cost>new_cell_cost:
+                movedown_cost = (curr_cell_cost - new_cell_cost) * 100
+                battery_cost = 0.02*(move_cost + movedown_cost*0.1)
+                move_cost += movedown_cost
+                new_battery = battery - battery_cost
+            else:
+                moveup_cost = (new_cell_cost - curr_cell_cost) * 100
+                battery_cost = 0.02*(move_cost + moveup_cost*1.25)
+                move_cost += moveup_cost
+                new_battery = battery - battery_cost
+
+            if new_battery <= 0:
+                print("drone can't reach station")
+                return
+
+            if is_destination(new_i, new_j, dest):
+                cell_details[new_i][new_j].parent_i = i
+                cell_details[new_i][new_j].parent_j = j
+                cell_details[new_i][new_j].battery = round(new_battery, 2)
+                cell_details[new_i][new_j].total_cost = move_cost
+                return (new_i, new_j)
+
+            h_new = calculate_h_value(new_i, new_j, new_cell_cost, dest)
+            g_new = cell_details[i][j].g + move_cost
+            f_new = g_new + h_new
+
+            if cell_details[new_i][new_j].f > f_new:
+                heapq.heappush(open_list, (f_new, new_i, new_j, round(new_battery, 2)))
+                cell_details[new_i][new_j].f = f_new
+                cell_details[new_i][new_j].g = g_new
+                cell_details[new_i][new_j].h = round(h_new, 2)
+                cell_details[new_i][new_j].battery = round(new_battery, 2)
+                cell_details[new_i][new_j].parent_i = i
+                cell_details[new_i][new_j].parent_j = j
+                cell_details[new_i][new_j].total_cost = move_cost
 
 def main():
     choose = input("Choose map (1-3): ").strip()
