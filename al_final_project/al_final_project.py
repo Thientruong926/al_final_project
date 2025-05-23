@@ -102,7 +102,7 @@ def a_star_search(grid, src, dest, ROW, COL):
             if not is_valid(new_i, new_j, ROW, COL):
                 continue
 
-            if grid[new_i][new_j] > 3:  # Ô không thể đi vào
+            if grid[new_i][new_j] > 3:  # Ô quá cao nên không nên đi vào
                 continue
 
             # Tính chi phí di chuyển: chéo hoặc thẳng
@@ -141,15 +141,22 @@ def a_star_search(grid, src, dest, ROW, COL):
                 return
 
             g_new = cell_details[i][j].g + move_cost
-
+            
             # Tính h mới: nếu gần ô sạc hơn thì ưu tiên
             h_to_closest_zero = min(calculate_h_value(new_i, new_j, zero_cell) for zero_cell in list_of_zero_cells)
             h_to_dest = calculate_h_value(new_i, new_j, dest)
-            h_new = min(h_to_closest_zero, h_to_dest)
+            #h_new = min(h_to_closest_zero, h_to_dest)
+
+            # Nếu điểm sạc gần hơn đích thì ưu tiên sạc
+            if h_to_closest_zero < h_to_dest:
+                h_new = h_to_closest_zero
+            else:
+                h_new = h_to_dest
 
             # Ưu tiên các ô có chi phí thấp hơn bằng cách giảm f theo priority_bias
-            priority_bias = 10.0 / (1 + new_cell_cost)
-            f_new = g_new + h_new - priority_bias
+            #priority_bias = 10.0 / (1 + new_cell_cost)
+         
+            f_new = g_new + h_new # - - priority_bias
 
             # Nếu ô mới tốt hơn (f nhỏ hơn), cập nhật thông tin
             if cell_details[new_i][new_j].f > f_new:
