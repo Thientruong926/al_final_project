@@ -14,6 +14,7 @@ class Cell:
         self.g = float('inf')  # Chi phí thực tế từ điểm xuất phát
         self.h = 0  # Heuristic ước lượng đến đích
         self.battery = pin_max  # Mức pin còn lại tại ô này
+        self.total_cost = 0
 
 # Hàm kiểm tra ô có nằm trong phạm vi lưới hay không
 def is_valid(row, col, ROW, COL):
@@ -31,21 +32,14 @@ def calculate_h_value(row, col, dest):
 def trace_path(cell_details, dest, grid):
     path = []
     row, col = dest
-    total_cost = 0.0
+    final_total_cost = 0
 
     # Truy ngược lại từ đích về nguồn
     while not (cell_details[row][col].parent_i == row and cell_details[row][col].parent_j == col):
         path.append((row, col, cell_details[row][col].battery))
         temp_row = cell_details[row][col].parent_i
         temp_col = cell_details[row][col].parent_j
-
-        dx = abs(row - temp_row)
-        dy = abs(col - temp_col)
-        step_cost = math.sqrt(2) if dx == 1 and dy == 1 else 1.0  # Diagonal hay thẳng
-
-        cell_value = 1 if isinstance(grid[row][col], str) else grid[row][col] or 1  # Nếu là 'A', 'B' thì coi là chi phí 1
-
-        total_cost += cell_value * step_cost  # Cộng dồn chi phí
+        final_total_cost += cell_details[row][col].total_cost
 
         row, col = temp_row, temp_col
 
@@ -56,7 +50,7 @@ def trace_path(cell_details, dest, grid):
         f.write("The Path is:\n")
         for i in path:
             f.write(f" -> {i}\n")
-        f.write(f"\nTotal cost of the Path is: {total_cost:.2f}\n")
+        f.write(f"\nTotal cost of the Path is: {final_total_cost:.2f}\n")
 
 # Thuật toán A* để tìm đường đi tối ưu từ src đến dest
 def a_star_search(grid, src, dest, ROW, COL):
@@ -136,6 +130,7 @@ def a_star_search(grid, src, dest, ROW, COL):
             if is_destination(new_i, new_j, dest):
                 cell_details[new_i][new_j].parent_i = i
                 cell_details[new_i][new_j].parent_j = j
+                cell_details[new_i][new_j].total_cost = move_cost
                 trace_path(cell_details, dest, grid)
                 found_dest = True
                 return
@@ -167,6 +162,7 @@ def a_star_search(grid, src, dest, ROW, COL):
                 cell_details[new_i][new_j].battery = round(new_battery, 2)
                 cell_details[new_i][new_j].parent_i = i
                 cell_details[new_i][new_j].parent_j = j
+                cell_details[new_i][new_j].total_cost = move_cost
 
     # Nếu không tìm thấy đích
     if not found_dest:
