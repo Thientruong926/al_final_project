@@ -127,7 +127,9 @@ def a_star_search(grid, src, dest, ROW, COL):
                 continue  # Bỏ qua nếu pin không đủ
             
             if new_cell_cost == 0.0 and not is_destination(new_i, new_j, dest):
-                #list_of_zero_cells.remove((new_i, new_j)) # Nếu 1 trạm đã đi qua rồi thì không cần thiết phải đi lại trạm đó nữa
+                cell_to_remove = (new_i, new_j)
+                if cell_to_remove in list_of_zero_cells:
+                    list_of_zero_cells.remove(cell_to_remove)
                 new_battery = pin_max  # Sạc đầy khi đi qua ô 0
 
             if is_destination(new_i, new_j, dest):
