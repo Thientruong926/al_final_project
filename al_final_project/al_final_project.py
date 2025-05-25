@@ -24,12 +24,12 @@ def is_valid(row, col, ROW, COL):
 def is_destination(row, col, dest):
     return row == dest[0] and col == dest[1]
 
-# Tính heuristic (h) theo khoảng cách Euclidean theo không gian 3d, đơn vị là mm
+# Tính heuristic (h) theo khoảng cách Euclidean, đơn vị là mm
 def calculate_h_value(row, col, dest, curr_height, dest_height):
     return math.hypot(100.0 * (dest_height - curr_height), math.hypot(400.0 * (row - dest[0]), 400.0 * (col - dest[1])))
 
 # Truy vết đường đi từ đích về nguồn và ghi ra file
-def trace_path(cell_details, dest, grid):
+def trace_path(cell_details, dest):
     path = []
     row, col = dest
     final_total_cost = 0
@@ -62,8 +62,9 @@ def a_star_search(grid, src, dest, ROW, COL):
     closed_list = [[False for _ in range(COL)] for _ in range(ROW)]
     # Khởi tạo thông tin chi tiết của từng ô
     cell_details = [[Cell() for _ in range(COL)] for _ in range(ROW)]
-
+    # Tọa độ xuất phát
     i, j = src
+
     # Cài đặt thông tin cho ô xuất phát
     cell_details[i][j].f = 0.0
     cell_details[i][j].g = 0.0
@@ -89,23 +90,14 @@ def a_star_search(grid, src, dest, ROW, COL):
         if closed_list[i][j]:
             continue
         closed_list[i][j] = True
-        '''
-        # Nếu đứng trên ô trạm
-        if cell_details[i][j].battery == 100:
-            cell_to_remove = (i, j)
-            if cell_to_remove in list_of_zero_cells:
-                list_of_zero_cells.remove(cell_to_remove)
-        '''
+
         for dir in directions:
             new_i, new_j = i + dir[0], j + dir[1]
 
             if not is_valid(new_i, new_j, ROW, COL):
                 continue
-
-            '''
-            if grid[new_i][new_j] > 3:  # Ô quá cao nên không nên đi vào
+            if closed_list[new_i][new_j]:
                 continue
-            '''
 
             # Tính chi phí di chuyển: chéo hoặc thẳng
             move_cost = 400.0 * math.sqrt(2) if dir[0] != 0 and dir[1] != 0 else 400.0
@@ -131,7 +123,7 @@ def a_star_search(grid, src, dest, ROW, COL):
 
             if new_battery <= 0.0:
                 continue  # Bỏ qua nếu pin không đủ
-            
+
             if new_cell_cost == 0.0 and not is_destination(new_i, new_j, dest):
                 new_battery = pin_max  # Sạc đầy khi đi qua ô 0
 
@@ -139,16 +131,22 @@ def a_star_search(grid, src, dest, ROW, COL):
                 cell_details[new_i][new_j].parent_i = i
                 cell_details[new_i][new_j].parent_j = j
                 cell_details[new_i][new_j].total_cost = move_cost
-                trace_path(cell_details, dest, grid)
+                trace_path(cell_details, dest)
                 found_dest = True
                 return
-            
-            # Tính g(n)
+
             g_new = cell_details[i][j].g + move_cost
             
-            # Tính h(n)
-            h_to_dest = calculate_h_value(new_i, new_j, dest, curr_cell_cost, 0)
-            h_new = h_to_dest
+            # Tính h mới: nếu gần ô sạc hơn thì ưu tiên
+            h_to_closest_zero = min(calculate_h_value(new_i, new_j, zero_cell, new_cell_cost, 0) for zero_cell in list_of_zero_cells)
+            h_to_dest = calculate_h_value(new_i, new_j, dest, new_cell_cost, 0)
+            #h_new = min(h_to_closest_zero, h_to_dest)
+
+            # Nếu điểm sạc gần hơn đích thì ưu tiên sạc
+            if new_battery < 0.02 * h_to_dest:
+                h_new = h_to_closest_zero
+            else:
+                h_new = h_to_dest
 
             # Ưu tiên các ô có chi phí thấp hơn bằng cách giảm f theo priority_bias
             #priority_bias = 10.0 / (1 + new_cell_cost)
@@ -157,15 +155,6 @@ def a_star_search(grid, src, dest, ROW, COL):
 
             # Nếu ô mới tốt hơn (f nhỏ hơn), cập nhật thông tin
             if cell_details[new_i][new_j].f > f_new:
-                
-                # Nếu pin không đủ để tới đích thì ưu tiên sạc
-                if new_battery < h_to_dest * 0.02:
-                    # Tính khoảng cách ước lượng tới trạm gần nhất
-                    h_to_closest_zero = min(calculate_h_value(new_i, new_j, zero_cell, new_cell_cost, 0) for zero_cell in list_of_zero_cells)
-                    h_new = h_to_closest_zero
-                    # Cập nhật f(n)
-                    f_new = g_new + h_new
-                
                 heapq.heappush(open_list, (f_new, new_i, new_j, new_battery))
                 cell_details[new_i][new_j].f = f_new
                 cell_details[new_i][new_j].g = g_new
@@ -174,7 +163,9 @@ def a_star_search(grid, src, dest, ROW, COL):
                 cell_details[new_i][new_j].parent_i = i
                 cell_details[new_i][new_j].parent_j = j
                 cell_details[new_i][new_j].total_cost = move_cost
-            print("(", i, ":", j, ") ", "(", new_i, ":", new_j, ")", g_new, h_new, f_new, new_battery)
+            print("(",i,",",j,")"," (",new_i,",",new_j,")", round(f_new, 2), round(new_battery, 2))
+            print()
+
 
     # Nếu không tìm thấy đích
     if not found_dest:
