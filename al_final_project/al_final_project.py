@@ -90,6 +90,12 @@ def a_star_search(grid, src, dest, ROW, COL):
             continue
         closed_list[i][j] = True
 
+        # Nếu đứng trên ô trạm
+        if cell_details[i][j].battery == 100:
+            cell_to_remove = (i, j)
+            if cell_to_remove in list_of_zero_cells:
+                list_of_zero_cells.remove(cell_to_remove)
+
         for dir in directions:
             new_i, new_j = i + dir[0], j + dir[1]
 
@@ -127,9 +133,6 @@ def a_star_search(grid, src, dest, ROW, COL):
                 continue  # Bỏ qua nếu pin không đủ
             
             if new_cell_cost == 0.0 and not is_destination(new_i, new_j, dest):
-                cell_to_remove = (new_i, new_j)
-                if cell_to_remove in list_of_zero_cells:
-                    list_of_zero_cells.remove(cell_to_remove)
                 new_battery = pin_max  # Sạc đầy khi đi qua ô 0
 
             if is_destination(new_i, new_j, dest):
@@ -139,19 +142,13 @@ def a_star_search(grid, src, dest, ROW, COL):
                 trace_path(cell_details, dest, grid)
                 found_dest = True
                 return
-
+            
+            # Tính g(n)
             g_new = cell_details[i][j].g + move_cost
             
-            # Tính h mới: nếu gần ô sạc hơn thì ưu tiên
-            h_to_closest_zero = min(calculate_h_value(new_i, new_j, zero_cell, curr_cell_cost, 0) for zero_cell in list_of_zero_cells)
+            # Tính h(n)
             h_to_dest = calculate_h_value(new_i, new_j, dest, curr_cell_cost, 0)
-            #h_new = min(h_to_closest_zero, h_to_dest)
-
-            # Nếu pin không đủ để tới đích thì ưu tiên sạc
-            if new_battery < h_to_dest * 0.02:
-                h_new = h_to_closest_zero
-            else:
-                h_new = h_to_dest
+            h_new = h_to_dest
 
             # Ưu tiên các ô có chi phí thấp hơn bằng cách giảm f theo priority_bias
             #priority_bias = 10.0 / (1 + new_cell_cost)
@@ -160,6 +157,15 @@ def a_star_search(grid, src, dest, ROW, COL):
 
             # Nếu ô mới tốt hơn (f nhỏ hơn), cập nhật thông tin
             if cell_details[new_i][new_j].f > f_new:
+
+                # Nếu pin không đủ để tới đích thì ưu tiên sạc
+                if new_battery < h_to_dest * 0.02:
+                    # Tính khoảng cách ước lượng tới trạm gần nhất
+                    h_to_closest_zero = min(calculate_h_value(new_i, new_j, zero_cell, new_cell_cost, 0) for zero_cell in list_of_zero_cells)
+                    h_new = h_to_closest_zero
+                    # Cập nhật f(n)
+                    f_new = g_new + h_new
+
                 heapq.heappush(open_list, (f_new, new_i, new_j, new_battery))
                 cell_details[new_i][new_j].f = f_new
                 cell_details[new_i][new_j].g = g_new
