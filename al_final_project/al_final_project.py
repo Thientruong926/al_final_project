@@ -142,12 +142,18 @@ def a_star_search(grid, src, dest, ROW, COL):
             h_to_dest = calculate_h_value(new_i, new_j, dest, new_cell_cost, 0)
             #h_new = min(h_to_closest_zero, h_to_dest)
 
-            # Nếu điểm sạc gần hơn đích thì ưu tiên sạc
+            # Nếu không đủ pin tới đích thì đi tìm trạm
             if new_battery < 0.02 * h_to_dest:
                 h_new = h_to_closest_zero
             else:
                 h_new = h_to_dest
-
+            
+            # Nếu có trạm gần đó thì tới đó luôn, tránh trường hợp gần đến đích lại phải đi tìm trạm
+            if h_to_closest_zero > h_to_dest:
+                h_new = h_to_closest_zero
+            else:
+                h_new = h_to_dest
+            
             # Ưu tiên các ô có chi phí thấp hơn bằng cách giảm f theo priority_bias
             #priority_bias = 10.0 / (1 + new_cell_cost)
          
@@ -163,9 +169,6 @@ def a_star_search(grid, src, dest, ROW, COL):
                 cell_details[new_i][new_j].parent_i = i
                 cell_details[new_i][new_j].parent_j = j
                 cell_details[new_i][new_j].total_cost = move_cost
-            print("(",i,",",j,")"," (",new_i,",",new_j,")", round(f_new, 2), round(new_battery, 2))
-            print()
-
 
     # Nếu không tìm thấy đích
     if not found_dest:
