@@ -148,7 +148,7 @@ def a_star_search(grid, src, dest, ROW, COL):
             else:
                 h_new = h_to_dest
             
-            # Nếu có trạm gần đó thì tới đó luôn, tránh trường hợp gần đến đích lại phải đi tìm trạm
+            # Nếu có trạm gần đó thì đi tới đó luôn, tránh trường hợp gần đến đích hết pin lại phải đi tìm trạm
             if h_to_closest_zero > h_to_dest:
                 h_new = h_to_closest_zero
             else:
