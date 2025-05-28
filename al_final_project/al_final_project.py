@@ -39,9 +39,9 @@ def is_valid(row, col, ROW, COL):
 def is_destination(row, col, dest):
     return row == dest[0] and col == dest[1]
 
-# Hàm ước lượng khoảng cách đến đích bằng khoảng cách Euclidean (có scale 400)
-def calculate_h_value(row, col, dest):
-    return math.hypot(400.0 * (row - dest[0]), 400.0 * (col - dest[1]))
+# Tính heuristic (h) theo khoảng cách Euclidean, đơn vị là mm
+def calculate_h_value(row, col, dest, curr_height, dest_height):
+    return math.hypot(100.0 * (dest_height - curr_height), math.hypot(400.0 * (row - dest[0]), 400.0 * (col - dest[1])))
 class PathFinder(threading.Thread):
     def __init__(self, grid, src, dest, callback):
         super().__init__()
@@ -127,9 +127,7 @@ class PathFinder(threading.Thread):
 
                 if not is_valid(new_i, new_j, ROW, COL):
                     continue
-
-                # Né các ô trọng số > 3
-                if grid[new_i][new_j] > 3:
+                if closed_list[new_i][new_j]:
                     continue
 
                 # Tính chi phí di chuyển: chéo hoặc thẳng
@@ -152,8 +150,7 @@ class PathFinder(threading.Thread):
                     moveup_cost = (new_cell_cost - curr_cell_cost) * 100.0
                     battery_cost = 0.02 * (move_cost + moveup_cost * 1.25)
                     move_cost += moveup_cost
-                    new_battery = battery - battery_cost
-
+                new_battery = battery - battery_cost
                 if new_battery <= 0.0:
                     continue  # Bỏ qua nếu pin không đủ
 
@@ -170,31 +167,27 @@ class PathFinder(threading.Thread):
 
                 g_new = cell_details[i][j].g + move_cost
 
-                '''
-                # Nếu pin nhỏ hơn hoặc bằng 80 thì ưu tiên tìm điểm 0, nếu không thì tìm B
-                if new_battery <= 100.0 and list_of_zero_cells:
-                    # Tính khoảng cách gần nhất đến điểm sạc
-                    h_to_closest_zero = min(calculate_h_value(new_i, new_j, zero_cell) for zero_cell in list_of_zero_cells)
-                    h_to_dest = calculate_h_value(new_i, new_j, dest)
+                # Tính h mới: nếu gần ô sạc hơn thì ưu tiên
+                h_to_closest_zero = min(calculate_h_value(new_i, new_j, zero_cell, new_cell_cost, 0) for zero_cell in list_of_zero_cells)
+                h_to_dest = calculate_h_value(new_i, new_j, dest, new_cell_cost, 0)
+                #h_new = min(h_to_closest_zero, h_to_dest)
 
-                    # Nếu điểm sạc gần hơn đích thì ưu tiên sạc
-                    if h_to_closest_zero < h_to_dest:
-                        h_new = h_to_closest_zero
-                    else:
-                        h_new = h_to_dest
-                else:
-                    h_new = calculate_h_value(new_i, new_j, dest)
-                '''
-                # Tính khoảng cách gần nhất đến điểm sạc
-                h_to_closest_zero = min(calculate_h_value(new_i, new_j, zero_cell) for zero_cell in list_of_zero_cells)
-                h_to_dest = calculate_h_value(new_i, new_j, dest)
-                if h_to_closest_zero < h_to_dest:
+                # Nếu không đủ pin tới đích thì đi tìm trạm
+                if new_battery < 0.02 * h_to_dest:
                     h_new = h_to_closest_zero
                 else:
                     h_new = h_to_dest
-
-                f_new = g_new + h_new
-
+                
+                # Nếu có trạm gần đó thì tới đó luôn, tránh trường hợp gần đến đích lại phải đi tìm trạm
+                if h_to_closest_zero > h_to_dest:
+                    h_new = h_to_closest_zero
+                else:
+                    h_new = h_to_dest
+                # Ưu tiên các ô có chi phí thấp hơn bằng cách giảm f theo priority_bias
+                #priority_bias = 10.0 / (1 + new_cell_cost)
+            
+                f_new = g_new + h_new # - - priority_bias
+                # Nếu ô mới tốt hơn (f nhỏ hơn), cập nhật thông tin
                 if cell_details[new_i][new_j].f > f_new:
                     heapq.heappush(open_list, (f_new, new_i, new_j, new_battery))
                     cell_details[new_i][new_j].f = f_new
@@ -207,9 +200,23 @@ class PathFinder(threading.Thread):
                     cell_details[new_i][new_j].height = grid[new_i][new_j]*100
 
         if not found_dest:
-            with open("output.txt", "w") as f:
-                f.write("Cannot find the destination cell\n")
-        return []
+            # Tìm trạm sạc gần nhất đã duyệt được
+            best_station = None
+            min_h = float('inf')
+            for i in range(ROW):
+                for j in range(COL):
+                    if closed_list[i][j] and grid[i][j] == 0:
+                        h = calculate_h_value(i, j, dest, 0, 0)
+                        if h < min_h:
+                            min_h = h
+                            best_station = (i, j)
+            if best_station:
+                print("Không đủ pin đến đích, dừng ở trạm sạc gần nhất:", best_station)
+                return self.trace_path(cell_details, best_station)
+            else:
+                with open("output.txt", "w") as f:
+                    f.write("Cannot find the destination cell\n")
+            return []
 
 
 
@@ -329,7 +336,7 @@ def draw_map(grid, path, current_idx, src, dest, drone_progress=0.0, is_waiting=
         # Độ cao là giá trị ô hiện tại (val)
         altitude = val if isinstance(val, (int, float)) else 0
         # Chọn màu theo độ cao
-        altitude_color = (0, 200, 0) if altitude < 100 else (220, 0, 0)
+        altitude_color = (0, 200, 0) if altitude <= 100 else (220, 0, 0)
         draw_text(f"Battery: {battery:.2f}%", map_width + 20, 40)
         draw_text(f"Cost: {cost}", map_width + 20, 80)
         draw_text(f"Position: ({r}, {c})", map_width + 20, 120)
