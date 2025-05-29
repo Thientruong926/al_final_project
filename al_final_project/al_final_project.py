@@ -179,7 +179,7 @@ class PathFinder(threading.Thread):
                     h_new = h_to_dest
                 
                 # Nếu có trạm gần đó thì tới đó luôn, tránh trường hợp gần đến đích lại phải đi tìm trạm
-                if h_to_closest_zero > h_to_dest:
+                if h_to_closest_zero < h_to_dest:
                     h_new = h_to_closest_zero
                 else:
                     h_new = h_to_dest
